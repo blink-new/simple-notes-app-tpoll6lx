@@ -27,4 +27,5 @@ export function parseMarkdown(text: string): string {
     // Line breaks
     .replace(/\n/g, '<br>')
     // Wrap in paragraph
-    .replace(/^(.+)$/gm, '<p>$1</p>')
+    .replace(/^(.+)$/gm, '<p>$1</p>');
+}
