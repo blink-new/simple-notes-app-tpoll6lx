@@ -1,7 +1,9 @@
 
 import { useState, useEffect } from 'react'
-import { Plus, Search, Trash2, Moon, Sun } from 'lucide-react'
+import { Plus, Search, Trash2, Moon, Sun, Pin, PinOff, Image as ImageIcon } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Button } from './components/ui/button'
 import { Input } from './components/ui/input'
 import { Card } from './components/ui/card'
@@ -13,6 +15,8 @@ interface Note {
   title: string
   content: string
   createdAt: number
+  isPinned?: boolean
+  images?: string[]
 }
 
 function App() {
@@ -28,6 +32,7 @@ function App() {
     }
     return false
   })
+  const [isPreview, setIsPreview] = useState(false)
 
   useEffect(() => {
     localStorage.setItem('notes', JSON.stringify(notes))
@@ -41,16 +46,17 @@ function App() {
     }
   }, [isDark])
 
-  const toggleTheme = () => {
-    setIsDark(!isDark)
-  }
+  const toggleTheme = () => setIsDark(!isDark)
+  const togglePreview = () => setIsPreview(!isPreview)
 
   const createNote = () => {
     const newNote: Note = {
       id: Date.now().toString(),
       title: 'Untitled Note',
       content: '',
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      isPinned: false,
+      images: []
     }
     setNotes([newNote, ...notes])
     setSelectedNote(newNote)
@@ -60,6 +66,9 @@ function App() {
     setNotes(notes.map(note => 
       note.id === id ? { ...note, ...updates } : note
     ))
+    if (selectedNote?.id === id) {
+      setSelectedNote(prev => prev ? { ...prev, ...updates } : prev)
+    }
   }
 
   const deleteNote = (id: string) => {
@@ -69,7 +78,38 @@ function App() {
     }
   }
 
-  const filteredNotes = notes.filter(note => 
+  const togglePin = (id: string) => {
+    updateNote(id, { isPinned: !notes.find(n => n.id === id)?.isPinned })
+  }
+
+  const addImage = async () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (file && selectedNote) {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const imageUrl = reader.result as string
+          updateNote(selectedNote.id, {
+            images: [...(selectedNote.images || []), imageUrl],
+            content: selectedNote.content + `\n![${file.name}](${imageUrl})`
+          })
+        }
+        reader.readAsDataURL(file)
+      }
+    }
+    input.click()
+  }
+
+  const sortedNotes = [...notes].sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1
+    if (!a.isPinned && b.isPinned) return 1
+    return b.createdAt - a.createdAt
+  })
+
+  const filteredNotes = sortedNotes.filter(note => 
     note.title.toLowerCase().includes(search.toLowerCase()) ||
     note.content.toLowerCase().includes(search.toLowerCase())
   )
@@ -128,27 +168,50 @@ function App() {
                       className={`p-4 mb-3 cursor-pointer transition-all hover:shadow-md
                         dark:bg-zinc-800/50 dark:border-zinc-700/50 dark:hover:border-amber-500/50
                         ${selectedNote?.id === note.id ? 'border-amber-500 dark:border-amber-500 shadow-lg' : 'border-transparent'}
+                        ${note.isPinned ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}
                       `}
                       onClick={() => setSelectedNote(note)}
                     >
                       <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-medium mb-1">{note.title}</h3>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            {note.isPinned && (
+                              <Pin className="h-3 w-3 text-amber-500 fill-amber-500" />
+                            )}
+                            <h3 className="font-medium truncate">{note.title}</h3>
+                          </div>
                           <p className="text-sm text-zinc-500 dark:text-zinc-400 line-clamp-2">
                             {note.content || 'No content'}
                           </p>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-zinc-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            deleteNote(note.id)
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={`text-zinc-400 hover:text-amber-500 
+                              ${note.isPinned ? 'text-amber-500' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              togglePin(note.id)
+                            }}
+                          >
+                            {note.isPinned ? 
+                              <PinOff className="h-4 w-4" /> : 
+                              <Pin className="h-4 w-4" />
+                            }
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-zinc-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              deleteNote(note.id)
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </Card>
                   </motion.div>
@@ -164,19 +227,46 @@ function App() {
                 animate={{ opacity: 1 }}
                 className="space-y-4"
               >
-                <Input
-                  type="text"
-                  value={selectedNote.title}
-                  onChange={(e) => updateNote(selectedNote.id, { title: e.target.value })}
-                  className="text-xl font-medium bg-white/50 dark:bg-zinc-800/50 backdrop-blur"
-                  placeholder="Note title"
-                />
-                <Textarea
-                  value={selectedNote.content}
-                  onChange={(e) => updateNote(selectedNote.id, { content: e.target.value })}
-                  className="min-h-[calc(100vh-16rem)] bg-white/50 dark:bg-zinc-800/50 backdrop-blur resize-none"
-                  placeholder="Write your note here..."
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    value={selectedNote.title}
+                    onChange={(e) => updateNote(selectedNote.id, { title: e.target.value })}
+                    className="text-xl font-medium bg-white/50 dark:bg-zinc-800/50 backdrop-blur flex-1"
+                    placeholder="Note title"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={addImage}
+                    className="shrink-0"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={togglePreview}
+                    className="shrink-0"
+                  >
+                    {isPreview ? 'Edit' : 'Preview'}
+                  </Button>
+                </div>
+
+                {isPreview ? (
+                  <div className="prose prose-zinc dark:prose-invert max-w-none min-h-[calc(100vh-16rem)] bg-white/50 dark:bg-zinc-800/50 backdrop-blur p-4 rounded-md">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {selectedNote.content}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <Textarea
+                    value={selectedNote.content}
+                    onChange={(e) => updateNote(selectedNote.id, { content: e.target.value })}
+                    className="min-h-[calc(100vh-16rem)] bg-white/50 dark:bg-zinc-800/50 backdrop-blur resize-none font-mono"
+                    placeholder="Write your note here... (Markdown supported)"
+                  />
+                )}
               </motion.div>
             ) : (
               <motion.div 
