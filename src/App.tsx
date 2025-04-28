@@ -2,13 +2,12 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search, Trash2, Moon, Sun, Pin, PinOff, Image as ImageIcon } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { Button } from './components/ui/button'
 import { Input } from './components/ui/input'
 import { Card } from './components/ui/card'
 import { ScrollArea } from './components/ui/scroll-area'
 import { Textarea } from './components/ui/textarea'
+import { parseMarkdown } from './lib/simple-markdown'
 
 interface Note {
   id: string
@@ -254,11 +253,10 @@ function App() {
                 </div>
 
                 {isPreview ? (
-                  <div className="prose prose-zinc dark:prose-invert max-w-none min-h-[calc(100vh-16rem)] bg-white/50 dark:bg-zinc-800/50 backdrop-blur p-4 rounded-md">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {selectedNote.content}
-                    </ReactMarkdown>
-                  </div>
+                  <div 
+                    className="prose prose-zinc dark:prose-invert max-w-none min-h-[calc(100vh-16rem)] bg-white/50 dark:bg-zinc-800/50 backdrop-blur p-4 rounded-md"
+                    dangerouslySetInnerHTML={{ __html: parseMarkdown(selectedNote.content) }}
+                  />
                 ) : (
                   <Textarea
                     value={selectedNote.content}
